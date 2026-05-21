@@ -1,0 +1,153 @@
+use pyo3::prelude::*;
+use std::collections::BTreeMap;
+use std::hash::{DefaultHasher, Hash, Hasher};
+
+fn hash_str(s: &str) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    s.hash(&mut hasher);
+    hasher.finish()
+}
+
+const VIRTUAL_NODES: u32 = 128;
+
+fn virtual_node_name(name: &str, i: u32) -> String {
+    format!("{}#{}", name, i)
+}
+
+#[pyclass]
+pub struct HashRing {
+    ring: BTreeMap<u64, String>,
+}
+
+#[pymethods]
+impl HashRing {
+    #[new]
+    pub fn new() -> Self {
+        Self {
+            ring: BTreeMap::new(),
+        }
+    }
+
+    pub fn add_node(&mut self, name: &str) {
+        for i in 0..VIRTUAL_NODES {
+            let virtual_name = virtual_node_name(name, i);
+            let position = hash_str(&virtual_name);
+            self.ring.insert(position, name.to_string());
+        }
+    }
+
+    pub fn get_node(&self, key: &str) -> Option<String> {
+        if self.ring.is_empty() {
+            return None;
+        }
+
+        let hash = hash_str(key);
+
+        //Find smallest position >= hash
+        match self.ring.range(hash..).next() {
+            Some((_, owner)) => Some(owner.clone()),
+            //Nothing found - wrap to smallest position
+            None => self.ring.values().next().cloned(),
+        }
+    }
+
+    pub fn contains(&self, name: &str) -> bool{
+        let virtual_name = virtual_node_name(name, 0);
+        let position = hash_str(&virtual_name);
+        self.ring.contains_key(&position)
+    }
+
+    pub fn remove_node(&mut self, name: &str) {
+        for i in 0..VIRTUAL_NODES {
+            let virtual_name = virtual_node_name(name, i);
+            let position = hash_str(&virtual_name);
+            self.ring.remove(&position);
+        }
+    }
+}
+
+/// Fastring - a Rust-backed consistent hash ring for Python.
+#[pymodule]
+fn fastring(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_class::<HashRing>()?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn basic_add_and_lookup() {
+        let mut ring = HashRing::new();
+        ring.add_node("node-A");
+        ring.add_node("node-B");
+        ring.add_node("node-C");
+
+        let owner = ring.get_node("user:1");
+        println!("user:1 -> {:?}", owner);
+        assert!(owner.is_some());
+    }
+
+    #[test]
+    fn same_key_same_node() {
+        let mut ring = HashRing::new();
+        ring.add_node("A");
+        ring.add_node("B");
+        ring.add_node("C");
+
+        let first = ring.get_node("my-key");
+        let second = ring.get_node("my-key");
+        assert_eq!(first, second);
+    }
+
+    #[test]
+    fn remove_node_works() {
+        let mut ring = HashRing::new();
+        ring.add_node("A");
+        ring.add_node("B");
+        ring.add_node("C");
+        assert!(ring.contains("A"));
+        ring.remove_node("A");
+        assert!(!ring.contains("A"));
+        assert!(ring.contains("B"));
+        assert!(ring.contains("C"));
+    }
+
+    #[test]
+    fn balanced_distribution() {
+        use std::collections::HashMap;
+
+        let mut ring = HashRing::new();
+        ring.add_node("A");
+        ring.add_node("B");
+        ring.add_node("C");
+
+        let mut counts:HashMap<String, u32> = HashMap::new();
+        let total = 10_000;
+
+        for i in 0..total {
+            let key = format!("key-{}", i);
+            if let Some(owner) = ring.get_node(&key) {
+                *counts.entry(owner.to_string()).or_insert(0) += 1;
+            }
+        }
+
+        println!("Distribution across {} keys:", total);
+        for (node, count) in &counts {
+            let pct = (*count as f64 / total as f64) * 100.0;
+            println!("  {} -> {} ({:.1}%)", node, count, pct);
+        }
+
+        let expected = total / 3;
+        let tolerance = total / 10;
+        for (node, count) in &counts {
+            let diff = (*count as i64 - expected as i64).abs() as u32;
+            assert!(
+                diff < tolerance,
+                "Node {} got {} keys, expected ~{}, +- {}",
+                node, count, expected, tolerance
+            );
+        }
+    }
+}
