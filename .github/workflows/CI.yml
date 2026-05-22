@@ -21,18 +21,17 @@ jobs:
         python: ["3.13", "3.14", "3.14t"]
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
         with:
           python-version: ${{ matrix.python }}
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Install maturin and test deps
-        run: pip install maturin pytest uhashring
-      - name: Build and install
-        run: maturin develop --release
+      - name: Sync dependencies and build
+        run: uv sync --group dev
       - name: Cargo test
         run: cargo test --lib
       - name: Pytest
-        run: pytest tests/ -v
+        run: uv run pytest tests/ -v
 
   linux:
     name: Build linux wheels (${{ matrix.target }})
