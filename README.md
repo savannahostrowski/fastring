@@ -31,7 +31,7 @@ ring.get_owners(["k1", "k2", "k3"])        # batch; releases the GIL
 
 Also supported: `len(ring)`, `name in ring`, `ring.remove_node(name)`, `pickle.dumps(ring)`.
 
-Prefer `get_owners(keys)` over a Python `for` loop — one FFI crossing instead of N.
+Prefer `get_owners(keys)` over a Python `for` loop: one FFI crossing instead of N.
 
 ## Performance
 
