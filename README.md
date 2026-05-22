@@ -2,7 +2,7 @@
 
 A fast consistent hash ring for Python, implemented in Rust.
 
-- **5-11× faster** than [`uhashring`](https://pypi.org/project/uhashring/) on lookups
+- **6× faster** per-call lookups vs [`uhashring`](https://pypi.org/project/uhashring/), **11× faster** with the batch API
 - **Weighted nodes** and **top-K replica** lookup for production use
 - **Batch API** (`get_owners`) for amortizing FFI cost across many keys
 - **Picklable**; safe to send across multiprocessing workers
