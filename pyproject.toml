@@ -4,10 +4,35 @@ build-backend = "maturin"
 
 [project]
 name = "fastring"
-requires-python = ">=3.8"
-classifiers = [
-    "Programming Language :: Rust",
-    "Programming Language :: Python :: Implementation :: CPython",
-    "Programming Language :: Python :: Implementation :: PyPy",
+description = "A fast consistent hash ring for Python, implemented in Rust."
+readme = "README.md"
+license = { text = "MIT" }
+authors = [
+    { name = "Savannah Ostrowski", email = "savannah@python.org" },
 ]
+requires-python = ">=3.13"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+keywords = ["consistent-hashing", "hash-ring", "ketama", "distributed-systems"]
 dynamic = ["version"]
+
+[project.urls]
+Homepage = "https://github.com/savannahostrowski/fastring"
+Repository = "https://github.com/savannahostrowski/fastring"
+Issues = "https://github.com/savannahostrowski/fastring/issues"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "uhashring>=2.4",
+]

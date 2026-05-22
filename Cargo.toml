@@ -2,6 +2,12 @@
 name = "fastring"
 version = "0.1.0"
 edition = "2024"
+description = "A fast consistent hash ring for Python, implemented in Rust."
+license = "MIT"
+repository = "https://github.com/savannahostrowski/fastring"
+readme = "README.md"
+keywords = ["consistent-hashing", "hash-ring", "pyo3"]
+categories = ["data-structures", "algorithms"]
 
 [lib]
 name = "fastring"

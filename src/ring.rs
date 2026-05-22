@@ -23,6 +23,14 @@ impl Ring {
         }
     }
 
+    pub fn virtual_nodes(&self) -> u32 {
+        self.virtual_nodes
+    }
+
+    pub fn nodes_with_weights(&self) -> impl Iterator<Item = (&Arc<str>, &u32)> + '_ {
+        self.nodes.iter().map(|(name, weight)| (name, weight))
+    }
+
     pub fn add_node(&mut self, name: &str, weight: u32) -> Option<Arc<str>> {
         let name: Arc<str> = Arc::from(name);
 

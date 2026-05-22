@@ -1,7 +1,5 @@
 """
-Compare fastring vs uhashring at the Python level.
-
-Run: .venv/bin/python benches/python_compare.py
+Compare fastring vs uhashring
 """
 
 import timeit
