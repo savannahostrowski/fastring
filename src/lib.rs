@@ -1,11 +1,10 @@
 use pyo3::prelude::*;
-use std::collections::BTreeMap;
-use std::hash::{DefaultHasher, Hash, Hasher};
+use std::collections::HashSet;
+use std::sync::Arc;
+use xxhash_rust::xxh3::xxh3_64;
 
 fn hash_str(s: &str) -> u64 {
-    let mut hasher = DefaultHasher::new();
-    s.hash(&mut hasher);
-    hasher.finish()
+    xxh3_64(s.as_bytes())
 }
 
 const VIRTUAL_NODES: u32 = 128;
@@ -16,7 +15,8 @@ fn virtual_node_name(name: &str, i: u32) -> String {
 
 #[pyclass]
 pub struct HashRing {
-    ring: BTreeMap<u64, String>,
+    ring: Vec<(u64, Arc<str>)>,
+    nodes: HashSet<Arc<str>>,
 }
 
 #[pymethods]
@@ -24,16 +24,26 @@ impl HashRing {
     #[new]
     pub fn new() -> Self {
         Self {
-            ring: BTreeMap::new(),
+            ring: Vec::new(),
+            nodes: HashSet::new(),
         }
     }
 
     pub fn add_node(&mut self, name: &str) {
-        for i in 0..VIRTUAL_NODES {
-            let virtual_name = virtual_node_name(name, i);
-            let position = hash_str(&virtual_name);
-            self.ring.insert(position, name.to_string());
+        let name: Arc<str> = Arc::from(name);
+
+        if self.nodes.contains(&*name) {
+            return;
         }
+
+        for i in 0..VIRTUAL_NODES {
+            let virtual_name = virtual_node_name(&name, i);
+            let position = hash_str(&virtual_name);
+            self.ring.push((position, name.clone()))
+        }
+
+        self.ring.sort_by_key(|n| n.0);
+        self.nodes.insert(name);
     }
 
     pub fn get_node(&self, key: &str) -> Option<String> {
@@ -43,26 +53,22 @@ impl HashRing {
 
         let hash = hash_str(key);
 
-        //Find smallest position >= hash
-        match self.ring.range(hash..).next() {
-            Some((_, owner)) => Some(owner.clone()),
-            //Nothing found - wrap to smallest position
-            None => self.ring.values().next().cloned(),
-        }
+        let pos = self.ring.partition_point(|entry| entry.0 < hash);
+        let index = pos % self.ring.len();
+        Some(self.ring[index].1.to_string())
     }
 
-    pub fn contains(&self, name: &str) -> bool{
-        let virtual_name = virtual_node_name(name, 0);
-        let position = hash_str(&virtual_name);
-        self.ring.contains_key(&position)
+    pub fn contains(&self, name: &str) -> bool {
+        self.nodes.contains(name)
     }
 
     pub fn remove_node(&mut self, name: &str) {
-        for i in 0..VIRTUAL_NODES {
-            let virtual_name = virtual_node_name(name, i);
-            let position = hash_str(&virtual_name);
-            self.ring.remove(&position);
+        if !self.nodes.contains(name) {
+            return;
         }
+
+        self.ring.retain(|entry| &*entry.1 != name);
+        self.nodes.remove(name);
     }
 }
 
@@ -123,7 +129,7 @@ mod tests {
         ring.add_node("B");
         ring.add_node("C");
 
-        let mut counts:HashMap<String, u32> = HashMap::new();
+        let mut counts: HashMap<String, u32> = HashMap::new();
         let total = 10_000;
 
         for i in 0..total {
@@ -146,7 +152,10 @@ mod tests {
             assert!(
                 diff < tolerance,
                 "Node {} got {} keys, expected ~{}, +- {}",
-                node, count, expected, tolerance
+                node,
+                count,
+                expected,
+                tolerance
             );
         }
     }
