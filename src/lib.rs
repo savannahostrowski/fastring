@@ -180,4 +180,38 @@ mod tests {
         let ring = HashRing::new();
         assert_eq!(ring.get_node("blah"), None);
     }
+
+    #[test]
+    fn remove_nonexistent_node_is_noop() {
+        let mut ring = HashRing::new();
+        ring.add_node("A");
+        ring.add_node("B");
+        ring.add_node("C");
+
+        ring.remove_node("ghost");
+        assert!(ring.contains("A"));
+        assert!(ring.contains("B"));
+        assert!(ring.contains("C"));
+        assert!(!ring.contains("ghost"));
+        assert!(ring.get_node("some-key").is_some());
+    }
+
+    impl HashRing {
+        fn ring_len(&self) -> usize {
+            self.ring.len()
+        }
+    }
+
+    #[test]
+    fn readding_node_is_idempotent() {
+        let mut ring = HashRing::new();
+        ring.add_node("A");
+        let len_after_first = ring.ring_len();
+
+        ring.add_node("A"); // should be a no-op
+        let len_after_second = ring.ring_len();
+
+        assert_eq!(len_after_first, len_after_second);
+        assert_eq!(len_after_first, VIRTUAL_NODES as usize);
+    }
 }
