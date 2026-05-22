@@ -159,4 +159,25 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn wraparound_never_returns_none() {
+        let mut ring = HashRing::new();
+        ring.add_node("A");
+        ring.add_node("B");
+        ring.add_node("C");
+
+        let total = 10_000;
+
+        for i in 0..total {
+            let key = format!("key-{}", i);
+            assert!(ring.get_node(&key).is_some(), "key {} returned None", key);
+        }
+    }
+
+    #[test]
+    fn empty_ring_returns_none() {
+        let ring = HashRing::new();
+        assert_eq!(ring.get_node("blah"), None);
+    }
 }
