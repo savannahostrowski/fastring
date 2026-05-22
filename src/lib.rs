@@ -7,23 +7,27 @@ fn hash_str(s: &str) -> u64 {
     xxh3_64(s.as_bytes())
 }
 
-const VIRTUAL_NODES: u32 = 128;
+const DEFAULT_VIRTUAL_NODES: u32 = 128;
 
 #[pyclass]
 pub struct HashRing {
     ring: Vec<(u64, Arc<str>)>,
     nodes: HashSet<Arc<str>>,
+    virtual_nodes: u32,
 }
 
 #[pymethods]
 impl HashRing {
     #[new]
-    pub fn new() -> Self {
+    #[pyo3(signature = (virtual_nodes = DEFAULT_VIRTUAL_NODES))]
+    pub fn new(virtual_nodes: u32) -> Self {
         Self {
             ring: Vec::new(),
             nodes: HashSet::new(),
+            virtual_nodes,
         }
     }
+
 
     pub fn add_node(&mut self, name: &str) {
         let name: Arc<str> = Arc::from(name);
@@ -34,7 +38,7 @@ impl HashRing {
 
         let mut hasher = Xxh3::new();
 
-        for i in 0..VIRTUAL_NODES {
+        for i in 0..self.virtual_nodes {
             hasher.reset();
             hasher.update(name.as_bytes());
             hasher.update(b"#");
@@ -48,15 +52,15 @@ impl HashRing {
     }
 
     pub fn get_node(&self, key: &str) -> Option<String> {
-        if self.ring.is_empty() {
-            return None;
-        }
+        self.lookup(key).map(|arc| arc.to_string())
+    }
 
-        let hash = hash_str(key);
-
-        let pos = self.ring.partition_point(|entry| entry.0 < hash);
-        let index = pos % self.ring.len();
-        Some(self.ring[index].1.to_string())
+    pub fn get_nodes(&self, py: Python<'_>, keys: Vec<String>) -> Vec<Option<String>> {
+        py.detach(|| {
+            keys.iter()
+                .map(|k| self.lookup(k).map(|arc| arc.to_string()))
+                .collect()
+        })
     }
 
     pub fn contains(&self, name: &str) -> bool {
@@ -73,6 +77,20 @@ impl HashRing {
     }
 }
 
+impl HashRing {
+    fn lookup(&self, key: &str)-> Option<Arc<str>> {
+        if self.ring.is_empty() {
+            return None;
+        }
+
+        let hash = hash_str(key);
+        let pos = self.ring.partition_point(|entry| entry.0 < hash);
+        let index = pos % self.ring.len();
+        Some(self.ring[index].1.clone())
+    }
+}
+
+
 /// Fastring - a Rust-backed consistent hash ring for Python.
 #[pymodule]
 fn fastring(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -86,7 +104,7 @@ mod tests {
 
     #[test]
     fn basic_add_and_lookup() {
-        let mut ring = HashRing::new();
+        let mut ring = HashRing::new(DEFAULT_VIRTUAL_NODES);
         ring.add_node("node-A");
         ring.add_node("node-B");
         ring.add_node("node-C");
@@ -98,7 +116,7 @@ mod tests {
 
     #[test]
     fn same_key_same_node() {
-        let mut ring = HashRing::new();
+        let mut ring = HashRing::new(DEFAULT_VIRTUAL_NODES);
         ring.add_node("A");
         ring.add_node("B");
         ring.add_node("C");
@@ -110,7 +128,7 @@ mod tests {
 
     #[test]
     fn remove_node_works() {
-        let mut ring = HashRing::new();
+        let mut ring = HashRing::new(DEFAULT_VIRTUAL_NODES);
         ring.add_node("A");
         ring.add_node("B");
         ring.add_node("C");
@@ -125,7 +143,7 @@ mod tests {
     fn balanced_distribution() {
         use std::collections::HashMap;
 
-        let mut ring = HashRing::new();
+        let mut ring = HashRing::new(DEFAULT_VIRTUAL_NODES);
         ring.add_node("A");
         ring.add_node("B");
         ring.add_node("C");
@@ -163,7 +181,7 @@ mod tests {
 
     #[test]
     fn wraparound_never_returns_none() {
-        let mut ring = HashRing::new();
+        let mut ring = HashRing::new(DEFAULT_VIRTUAL_NODES);
         ring.add_node("A");
         ring.add_node("B");
         ring.add_node("C");
@@ -178,13 +196,13 @@ mod tests {
 
     #[test]
     fn empty_ring_returns_none() {
-        let ring = HashRing::new();
+        let ring = HashRing::new(DEFAULT_VIRTUAL_NODES);
         assert_eq!(ring.get_node("blah"), None);
     }
 
     #[test]
     fn remove_nonexistent_node_is_noop() {
-        let mut ring = HashRing::new();
+        let mut ring = HashRing::new(DEFAULT_VIRTUAL_NODES);
         ring.add_node("A");
         ring.add_node("B");
         ring.add_node("C");
@@ -205,7 +223,7 @@ mod tests {
 
     #[test]
     fn readding_node_is_idempotent() {
-        let mut ring = HashRing::new();
+        let mut ring = HashRing::new(DEFAULT_VIRTUAL_NODES);
         ring.add_node("A");
         let len_after_first = ring.ring_len();
 
@@ -213,6 +231,6 @@ mod tests {
         let len_after_second = ring.ring_len();
 
         assert_eq!(len_after_first, len_after_second);
-        assert_eq!(len_after_first, VIRTUAL_NODES as usize);
+        assert_eq!(len_after_first, DEFAULT_VIRTUAL_NODES as usize);
     }
 }
