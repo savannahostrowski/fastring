@@ -1,17 +1,13 @@
 use pyo3::prelude::*;
 use std::collections::HashSet;
 use std::sync::Arc;
-use xxhash_rust::xxh3::xxh3_64;
+use xxhash_rust::xxh3::{xxh3_64, Xxh3};
 
 fn hash_str(s: &str) -> u64 {
     xxh3_64(s.as_bytes())
 }
 
 const VIRTUAL_NODES: u32 = 128;
-
-fn virtual_node_name(name: &str, i: u32) -> String {
-    format!("{}#{}", name, i)
-}
 
 #[pyclass]
 pub struct HashRing {
@@ -36,9 +32,14 @@ impl HashRing {
             return;
         }
 
+        let mut hasher = Xxh3::new();
+
         for i in 0..VIRTUAL_NODES {
-            let virtual_name = virtual_node_name(&name, i);
-            let position = hash_str(&virtual_name);
+            hasher.reset();
+            hasher.update(name.as_bytes());
+            hasher.update(b"#");
+            hasher.update(&i.to_le_bytes());
+            let position = hasher.digest();
             self.ring.push((position, name.clone()))
         }
 
