@@ -24,8 +24,9 @@ impl HashRing {
         }
     }
 
-    pub fn add_node(&mut self, py: Python<'_>, name: &str) {
-        if let Some(arc) = self.inner.add_node(name) {
+    #[pyo3(signature = (name, weight = 1))]
+    pub fn add_node(&mut self, py: Python<'_>, name: &str, weight: u32) {
+        if let Some(arc) = self.inner.add_node(name, weight) {
             let py_name: Py<PyString> = PyString::new(py, name).unbind();
             self.py_names.insert(arc, py_name);
         }

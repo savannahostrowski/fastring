@@ -5,7 +5,7 @@ use std::hint::black_box;
 fn bench_get_node(c: &mut Criterion) {
     let mut ring = Ring::new(128);
     for i in 0..100 {
-        ring.add_node(&format!("node-{}", i));
+        ring.add_node(&format!("node-{}", i), 1);
     }
 
     c.bench_function("get_node", |b| {
@@ -17,7 +17,7 @@ fn bench_add_node(c: &mut Criterion) {
     c.bench_function("add_node", |b| {
         b.iter_batched(
             || Ring::new(128),
-            |mut ring| ring.add_node(black_box("server-A")),
+            |mut ring| ring.add_node(black_box("server-A"), 1),
             criterion::BatchSize::SmallInput,
         );
     });
@@ -26,7 +26,7 @@ fn bench_add_node(c: &mut Criterion) {
 fn bench_get_node_batch(c: &mut Criterion) {
     let mut ring = Ring::new(128);
     for i in 0..100 {
-        ring.add_node(&format!("node-{}", i));
+        ring.add_node(&format!("node-{}", i), 1);
     }
     let keys: Vec<String> = (0..1000).map(|i| format!("key-{}", i)).collect();
 

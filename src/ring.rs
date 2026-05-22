@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::sync::Arc;
 use xxhash_rust::xxh3::{xxh3_64, Xxh3};
 
@@ -10,7 +10,7 @@ fn hash_str(s: &str) -> u64 {
 
 pub struct Ring {
     ring: Vec<(u64, Arc<str>)>,
-    nodes: HashSet<Arc<str>>,
+    nodes: HashMap<Arc<str>, u32>,
     virtual_nodes: u32,
 }
 
@@ -18,21 +18,21 @@ impl Ring {
     pub fn new(virtual_nodes: u32) -> Self {
         Self {
             ring: Vec::new(),
-            nodes: HashSet::new(),
+            nodes: HashMap::new(),
             virtual_nodes,
         }
     }
 
-    pub fn add_node(&mut self, name: &str) -> Option<Arc<str>> {
+    pub fn add_node(&mut self, name: &str, weight: u32) -> Option<Arc<str>> {
         let name: Arc<str> = Arc::from(name);
 
-        if self.nodes.contains(&*name) {
+        if self.nodes.contains_key(&*name) {
             return None
         }
 
         let mut hasher = Xxh3::new();
 
-        for i in 0..self.virtual_nodes {
+        for i in 0..self.virtual_nodes * weight {
             hasher.reset();
             hasher.update(name.as_bytes());
             hasher.update(b"#");
@@ -42,13 +42,13 @@ impl Ring {
         }
 
         self.ring.sort_by_key(|n| n.0);
-        self.nodes.insert(name.clone());
+        self.nodes.insert(name.clone(), weight);
 
         Some(name.clone())
     }
 
     pub fn remove_node(&mut self, name: &str) {
-        if !self.nodes.contains(name) {
+        if !self.nodes.contains_key(name) {
             return;
         }
 
@@ -57,7 +57,7 @@ impl Ring {
     }
 
     pub fn contains(&self, name: &str) -> bool {
-        self.nodes.contains(name)
+        self.nodes.contains_key(name)
     }
 
     pub fn get_node(&self, key: &str) -> Option<String> {
@@ -90,9 +90,9 @@ mod tests {
     #[test]
     fn basic_add_and_lookup() {
         let mut ring = Ring::new(DEFAULT_VIRTUAL_NODES);
-        ring.add_node("node-A");
-        ring.add_node("node-B");
-        ring.add_node("node-C");
+        ring.add_node("node-A", 1);
+        ring.add_node("node-B", 1);
+        ring.add_node("node-C", 1);
 
         let owner = ring.get_node("user:1");
         assert!(owner.is_some());
@@ -101,9 +101,9 @@ mod tests {
     #[test]
     fn same_key_same_node() {
         let mut ring = Ring::new(DEFAULT_VIRTUAL_NODES);
-        ring.add_node("A");
-        ring.add_node("B");
-        ring.add_node("C");
+        ring.add_node("A", 1);
+        ring.add_node("B", 1);
+        ring.add_node("C", 1);
 
         let first = ring.get_node("my-key");
         let second = ring.get_node("my-key");
@@ -113,9 +113,9 @@ mod tests {
     #[test]
     fn remove_node_works() {
         let mut ring = Ring::new(DEFAULT_VIRTUAL_NODES);
-        ring.add_node("A");
-        ring.add_node("B");
-        ring.add_node("C");
+        ring.add_node("A", 1);
+        ring.add_node("B", 1);
+        ring.add_node("C", 1);
         assert!(ring.contains("A"));
         ring.remove_node("A");
         assert!(!ring.contains("A"));
@@ -128,9 +128,9 @@ mod tests {
         use std::collections::HashMap;
 
         let mut ring = Ring::new(DEFAULT_VIRTUAL_NODES);
-        ring.add_node("A");
-        ring.add_node("B");
-        ring.add_node("C");
+        ring.add_node("A", 1);
+        ring.add_node("B", 1);
+        ring.add_node("C", 1);
 
         let mut counts: HashMap<String, u32> = HashMap::new();
         let total = 10_000;
@@ -160,9 +160,9 @@ mod tests {
     #[test]
     fn wraparound_never_returns_none() {
         let mut ring = Ring::new(DEFAULT_VIRTUAL_NODES);
-        ring.add_node("A");
-        ring.add_node("B");
-        ring.add_node("C");
+        ring.add_node("A", 1);
+        ring.add_node("B", 1);
+        ring.add_node("C", 1);
 
         let total = 10_000;
 
@@ -181,9 +181,9 @@ mod tests {
     #[test]
     fn remove_nonexistent_node_is_noop() {
         let mut ring = Ring::new(DEFAULT_VIRTUAL_NODES);
-        ring.add_node("A");
-        ring.add_node("B");
-        ring.add_node("C");
+        ring.add_node("A", 1);
+        ring.add_node("B", 1);
+        ring.add_node("C", 1);
 
         ring.remove_node("ghost");
         assert!(ring.contains("A"));
@@ -196,13 +196,44 @@ mod tests {
     #[test]
     fn readding_node_is_idempotent() {
         let mut ring = Ring::new(DEFAULT_VIRTUAL_NODES);
-        ring.add_node("A");
+        ring.add_node("A", 1);
         let len_after_first = ring.ring_len();
 
-        ring.add_node("A");
+        ring.add_node("A", 1);
         let len_after_second = ring.ring_len();
 
         assert_eq!(len_after_first, len_after_second);
         assert_eq!(len_after_first, DEFAULT_VIRTUAL_NODES as usize);
+    }
+
+    #[test]
+    fn weighted_node_gets_more_keys() {
+        let mut ring = Ring::new(DEFAULT_VIRTUAL_NODES);
+        ring.add_node("A", 1);
+        ring.add_node("B", 2);
+        ring.add_node("C", 3);
+
+        let mut counts: HashMap<String, u32> = HashMap::new();
+        let total = 10_000;
+
+        for i in 0..total {
+            let key = format!("key-{}", i);
+            let owner = ring.get_node(&key).expect("ring should never return None here");
+            *counts.entry(owner).or_insert(0) += 1;
+        }
+
+        let total_keys_assigned = counts.values().sum::<u32>() as f64;
+        let a = counts["A"] as f64 / total_keys_assigned;
+        let b = counts["B"] as f64 / total_keys_assigned;
+        let c = counts["C"] as f64 / total_keys_assigned;
+
+        // expected: 1/6, 2/6, 3/6
+        fn close(actual: f64, expected: f64) -> bool {
+            (actual - expected).abs() < 0.05  // within 5 percentage points
+        }
+
+        assert!(close(a, 1.0 / 6.0), "A got share {} (expected ~0.167)", a);
+        assert!(close(b, 2.0 / 6.0), "B got share {} (expected ~0.333)", b);
+        assert!(close(c, 3.0 / 6.0), "C got share {} (expected ~0.500)", c);
     }
 }
