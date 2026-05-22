@@ -23,11 +23,11 @@ impl Ring {
         }
     }
 
-    pub fn add_node(&mut self, name: &str) {
+    pub fn add_node(&mut self, name: &str) -> Option<Arc<str>> {
         let name: Arc<str> = Arc::from(name);
 
         if self.nodes.contains(&*name) {
-            return;
+            return None
         }
 
         let mut hasher = Xxh3::new();
@@ -42,7 +42,9 @@ impl Ring {
         }
 
         self.ring.sort_by_key(|n| n.0);
-        self.nodes.insert(name);
+        self.nodes.insert(name.clone());
+
+        Some(name.clone())
     }
 
     pub fn remove_node(&mut self, name: &str) {
