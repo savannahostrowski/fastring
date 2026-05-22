@@ -3,12 +3,17 @@ name = "fastring"
 version = "0.1.0"
 edition = "2024"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
 name = "fastring"
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 pyo3 = { version = "0.28.3", features = ["extension-module"] }
-xxhash-rust = { version = "0.8", features = ["xxh3"] }
+xxhash-rust = { version = "0.8.3", features = ["xxh3"] }
 
+[dev-dependencies]
+criterion = "0.8.2"
+
+[[bench]]
+name = "hashring"
+harness = false
