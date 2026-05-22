@@ -74,14 +74,14 @@ def main():
         f"{uhash_loop / fast_loop:>9.1f}x"
     )
 
-    # Batch via fastring.get_nodes
+    # Batch via fastring.get_owners
     fast_batch = measure(
-        "ring.get_nodes(keys)",
+        "ring.get_owners(keys)",
         {"ring": fast_ring, "keys": keys},
         number=1000,
     ) / N_KEYS
     print(
-        f"{'fastring get_nodes (per key)':<35} "
+        f"{'fastring get_owners (per key)':<35} "
         f"{fast_batch * 1e9:>12.0f} ns {'(N/A)':>15} "
         f"{uhash_loop / fast_batch:>9.1f}x"
     )

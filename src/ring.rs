@@ -74,6 +74,32 @@ impl Ring {
         let index = pos % self.ring.len();
         Some(self.ring[index].1.clone())
     }
+
+    pub fn replicas(&self, key: &str, count: usize) -> Vec<Arc<str>> {
+        if self.ring.is_empty() || count == 0 {
+            return Vec::new();
+        }
+
+        let count = count.min(self.nodes.len());
+        let hash = hash_str(key);
+        let pos = self.ring.partition_point(|entry| entry.0 < hash);
+
+        let mut out: Vec<Arc<str>> = Vec::with_capacity(count);
+        for offset in 0..self.ring.len() {
+            let idx = (pos + offset) % self.ring.len();
+            let node = &self.ring[idx].1;
+
+            if out.iter().any(|existing| Arc::ptr_eq(existing, node)) {
+                continue;
+            }
+
+            out.push(node.clone());
+            if out.len() == count {
+                break;
+            }
+        }
+        out
+    }
 }
 
 #[cfg(test)]
@@ -235,5 +261,57 @@ mod tests {
         assert!(close(a, 1.0 / 6.0), "A got share {} (expected ~0.167)", a);
         assert!(close(b, 2.0 / 6.0), "B got share {} (expected ~0.333)", b);
         assert!(close(c, 3.0 / 6.0), "C got share {} (expected ~0.500)", c);
+    }
+
+    #[test]
+    fn replicas_returns_n_distinct_owners() {
+        let mut ring = Ring::new(DEFAULT_VIRTUAL_NODES);
+        ring.add_node("A", 1);
+        ring.add_node("B", 1);
+        ring.add_node("C", 1);
+
+        let replicas = ring.replicas("my-key", 3);
+        assert_eq!(replicas.len(), 3);
+        let mut sorted: Vec<&str> = replicas.iter().map(|arc| &**arc).collect();
+        sorted.sort();
+        sorted.dedup();
+        assert_eq!(sorted.len(), 3, "Replicas should be distinct");
+    }
+
+    #[test]
+    fn replicas_caps_at_node_count() {
+        let mut ring = Ring::new(DEFAULT_VIRTUAL_NODES);
+        ring.add_node("A", 1);
+        ring.add_node("B", 1);
+
+        let replicas = ring.replicas("my-key", 5);
+        assert_eq!(replicas.len(), 2, "Should return at most the number of nodes");
+    }
+
+    #[test]
+    fn replicas_primary_matches_get_node() {
+        let mut ring = Ring::new(DEFAULT_VIRTUAL_NODES);
+        ring.add_node("A", 1);
+        ring.add_node("B", 1);
+        ring.add_node("C", 1);
+
+        let primary = ring.get_node("my-key").unwrap();
+        let replicas = ring.replicas("my-key", 3);
+        assert_eq!(replicas[0].as_ref(), primary.as_str(), "First replica should match get_node");
+    }
+
+    #[test]
+    fn replicas_on_empty_ring() {
+        let ring = Ring::new(DEFAULT_VIRTUAL_NODES);
+        let replicas = ring.replicas("my-key", 3);
+        assert!(replicas.is_empty(), "Replicas should be empty on an empty ring");
+    }
+
+    #[test]
+    fn replicas_zero_n() {
+        let mut ring = Ring::new(DEFAULT_VIRTUAL_NODES);
+        ring.add_node("A", 1);
+        let replicas = ring.replicas("my-key", 0);
+        assert!(replicas.is_empty(), "Replicas should be empty when count is zero");
     }
 }

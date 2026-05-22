@@ -32,6 +32,13 @@ impl HashRing {
         }
     }
 
+    #[pyo3(signature = (key, count))]
+    pub fn get_replicas(&self, py: Python<'_>, key: &str, count: usize) -> Vec<Py<PyString>> {
+        self.inner.replicas(key, count).into_iter()
+            .map(|arc| self.py_names.get(&arc).unwrap().clone_ref(py))
+            .collect()
+    }
+
     pub fn remove_node(&mut self, _py: Python<'_>,  name: &str) {
         self.inner.remove_node(name);
         self.py_names.remove(name);
@@ -47,7 +54,7 @@ impl HashRing {
         Some(py_name.clone_ref(py))
     }
 
-    pub fn get_nodes(&self, py: Python<'_>, keys: Vec<String>) -> Vec<Option<Py<PyString>>>{
+    pub fn get_owners(&self, py: Python<'_>, keys: Vec<String>) -> Vec<Option<Py<PyString>>>{
         let arcs: Vec<Option<Arc<str>>> = py.detach(|| {
             keys.iter().map(|k| self.inner.lookup(k)).collect()
         });
