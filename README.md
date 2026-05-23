@@ -4,7 +4,6 @@ A fast consistent hash ring for Python, implemented in Rust.
 
 - **6× faster** per-call lookups vs [`uhashring`](https://pypi.org/project/uhashring/), **11× faster** with the batch API
 - Weighted nodes, top-K replica lookup, batch lookup, picklable
-- Compatible with free-threaded Python (3.14t)
 
 ## Install
 
@@ -31,7 +30,7 @@ ring.get_owners(["k1", "k2", "k3"])        # batch; releases the GIL
 
 Also supported: `len(ring)`, `name in ring`, `ring.remove_node(name)`, `pickle.dumps(ring)`.
 
-Prefer `get_owners(keys)` over a Python `for` loop: one FFI crossing instead of N.
+Prefer `get_owners(keys)` over a `for` loop: one FFI crossing instead of N.
 
 ## Performance
 
@@ -43,7 +42,7 @@ Apple Silicon, 100 nodes, 1000 keys per batch.
 | `get_owners`      | 56 ns/key  | (no API)      | **11.5×** |
 | `add + remove`    | 47 µs      | 3,524 µs      | **75×**   |
 
-Free-threaded 3.14t adds ~30 ns per call (PyO3 borrow check); batched ops are unchanged.
+Free-threaded 3.14t adds ~30 ns per call (PyO3 borrow check); batched ops are essentially unchanged.
 
 ## License
 
