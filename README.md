@@ -39,7 +39,7 @@ Apple Silicon, 100 nodes, 1000 keys per batch.
 | Operation         | fastring   | uhashring 2.4 | Speedup   |
 | ----------------- | ---------- | ------------- | --------- |
 | `get_node`        | 68 ns      | 566 ns        | **8.3×**  |
-| `get_node_batch`      | 56 ns/key  | (no API)      | **11.5×** |
+| `get_node_batch`  | 56 ns/key  | (no API)      | **11.5×** |
 | `add + remove`    | 47 µs      | 3,524 µs      | **75×**   |
 
 Free-threaded 3.14t adds ~30 ns per call (PyO3 borrow check); batched ops are essentially unchanged.
