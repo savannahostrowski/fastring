@@ -1,5 +1,5 @@
 use pyo3::{exceptions::PyKeyError, prelude::*};
-use pyo3::types::{PyList, PyString};
+use pyo3::types::{PyDict, PyList, PyString};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -22,6 +22,19 @@ impl HashRing {
             inner: Ring::new(virtual_nodes),
             py_names: HashMap::new(),
         }
+    }
+
+    #[getter]
+    pub fn nodes(&self, py: Python<'_>) -> PyResult<Py<PyDict>> {
+        let dict = PyDict::new(py);
+        for (name, weight) in self.inner.nodes_with_weights() {
+            let node = PyDict::new(py);
+            node.set_item("weight", weight)?;
+            node.set_item("vnodes", self.inner.virtual_nodes())?;
+            let py_name = self.py_names.get(name).unwrap().clone_ref(py);
+            dict.set_item(py_name, node)?;
+        }
+        Ok(dict.into())
     }
 
     #[pyo3(signature = (name, weight = 1))]
@@ -54,6 +67,10 @@ impl HashRing {
         let arc = self.inner.lookup(key)?;
         let py_name = self.py_names.get(&arc).unwrap();
         Some(py_name.clone_ref(py))
+    }
+
+    pub fn get_node_weight(&self, name: &str) -> Option<u32> {
+        self.inner.weight(name)
     }
 
     pub fn __getitem__(&self, py: Python<'_>, key: &str) -> PyResult<Py<PyString>> {
