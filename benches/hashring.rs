@@ -1,4 +1,4 @@
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use fastring::Ring;
 use std::hint::black_box;
 
@@ -9,7 +9,7 @@ fn bench_get_node(c: &mut Criterion) {
     }
 
     c.bench_function("get_node", |b| {
-        b.iter(|| ring.get_node(black_box("some-key")));
+        b.iter(|| ring.lookup(black_box("some-key")));
     });
 }
 
@@ -39,5 +39,10 @@ fn bench_get_node_batch(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, bench_get_node, bench_add_node, bench_get_node_batch);
+criterion_group!(
+    benches,
+    bench_get_node,
+    bench_add_node,
+    bench_get_node_batch
+);
 criterion_main!(benches);

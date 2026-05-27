@@ -35,8 +35,37 @@ Issues = "https://github.com/savannahostrowski/fastring/issues"
 dev = [
     "pytest>=8.0",
     "uhashring>=2.4",
+    "ruff>=0.15",
+    "ty>=0.0.40",
+]
+docs = [
+    "zensical>=0.0.43",
+    "mkdocstrings[python]>=1.0",
 ]
 
 [tool.maturin]
 python-source="."
 include = ["fastring/*.pyi", "fastring/py.typed"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+extend-exclude = ["target", "site", ".venv"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "SIM", # flake8-simplify
+]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.ty.src]
+include = ["fastring", "tests", "benches"]
+exclude = ["target", "site", ".venv"]

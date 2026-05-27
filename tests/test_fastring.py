@@ -78,13 +78,13 @@ def test_getitem_returns_owner():
     assert r["k1"] in {"a", "b"}
 
 
-def test_get_owners_batch_matches_individual():
+def test_get_node_batch_matches_individual():
     r = HashRing()
     for n in "abc":
         r.add_node(n)
     keys = [f"key-{i}" for i in range(100)]
     individual = [r.get_node(k) for k in keys]
-    batch = r.get_owners(keys)
+    batch = r.get_node_batch(keys)
     assert individual == batch
 
 

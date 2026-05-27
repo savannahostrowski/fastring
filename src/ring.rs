@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
-use xxhash_rust::xxh3::{xxh3_64, Xxh3};
+use xxhash_rust::xxh3::{Xxh3, xxh3_64};
 
 pub const DEFAULT_VIRTUAL_NODES: u32 = 128;
 
@@ -28,7 +28,7 @@ impl Ring {
     }
 
     pub fn nodes_with_weights(&self) -> impl Iterator<Item = (&Arc<str>, &u32)> + '_ {
-        self.nodes.iter().map(|(name, weight)| (name, weight))
+        self.nodes.iter()
     }
 
     /// Adds a node to the ring.
@@ -180,7 +180,7 @@ mod tests {
         let expected = total / 3;
         let tolerance = total / 10;
         for (node, count) in &counts {
-            let diff = (*count as i64 - expected as i64).abs() as u32;
+            let diff = (*count as i64 - expected as i64).unsigned_abs() as u32;
             assert!(
                 diff < tolerance,
                 "Node {} got {} keys, expected ~{}, +- {}",
@@ -253,7 +253,9 @@ mod tests {
 
         for i in 0..total {
             let key = format!("key-{}", i);
-            let owner = ring.lookup(&key).expect("ring should never return None here");
+            let owner = ring
+                .lookup(&key)
+                .expect("ring should never return None here");
             *counts.entry(owner.to_string()).or_insert(0) += 1;
         }
 
@@ -264,7 +266,7 @@ mod tests {
 
         // expected: 1/6, 2/6, 3/6
         fn close(actual: f64, expected: f64) -> bool {
-            (actual - expected).abs() < 0.05  // within 5 percentage points
+            (actual - expected).abs() < 0.05 // within 5 percentage points
         }
 
         assert!(close(a, 1.0 / 6.0), "A got share {} (expected ~0.167)", a);
@@ -294,7 +296,11 @@ mod tests {
         ring.add_node("B", 1);
 
         let replicas = ring.replicas("my-key", 5);
-        assert_eq!(replicas.len(), 2, "Should return at most the number of nodes");
+        assert_eq!(
+            replicas.len(),
+            2,
+            "Should return at most the number of nodes"
+        );
     }
 
     #[test]
@@ -306,14 +312,21 @@ mod tests {
 
         let primary = ring.lookup("my-key").unwrap();
         let replicas = ring.replicas("my-key", 3);
-        assert_eq!(replicas[0].as_ref(), primary.as_ref(), "First replica should match get_node");
+        assert_eq!(
+            replicas[0].as_ref(),
+            primary.as_ref(),
+            "First replica should match get_node"
+        );
     }
 
     #[test]
     fn replicas_on_empty_ring() {
         let ring = Ring::new(DEFAULT_VIRTUAL_NODES);
         let replicas = ring.replicas("my-key", 3);
-        assert!(replicas.is_empty(), "Replicas should be empty on an empty ring");
+        assert!(
+            replicas.is_empty(),
+            "Replicas should be empty on an empty ring"
+        );
     }
 
     #[test]
@@ -321,7 +334,10 @@ mod tests {
         let mut ring = Ring::new(DEFAULT_VIRTUAL_NODES);
         ring.add_node("A", 1);
         let replicas = ring.replicas("my-key", 0);
-        assert!(replicas.is_empty(), "Replicas should be empty when count is zero");
+        assert!(
+            replicas.is_empty(),
+            "Replicas should be empty when count is zero"
+        );
     }
 
     #[test]

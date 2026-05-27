@@ -1,5 +1,3 @@
-from .fastring import *
+from .fastring import HashRing
 
-__doc__ = fastring.__doc__
-if hasattr(fastring, "__all__"):
-    __all__ = fastring.__all__
+__all__ = ["HashRing"]
