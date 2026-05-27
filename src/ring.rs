@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, io::ErrorKind};
 use std::sync::Arc;
 use xxhash_rust::xxh3::{xxh3_64, Xxh3};
 
@@ -31,11 +31,11 @@ impl Ring {
         self.nodes.iter().map(|(name, weight)| (name, weight))
     }
 
-    pub fn add_node(&mut self, name: &str, weight: u32) -> Option<Arc<str>> {
+    pub fn add_node(&mut self, name: &str, weight: u32) -> Result<Arc<str>, ErrorKind> {
         let name: Arc<str> = Arc::from(name);
 
         if self.nodes.contains_key(&*name) {
-            return None
+            return Err(ErrorKind::AlreadyExists);
         }
 
         let mut hasher = Xxh3::new();
@@ -49,10 +49,9 @@ impl Ring {
             self.ring.push((position, name.clone()))
         }
 
-        self.ring.sort_by_key(|n| n.0);
+        self.ring.sort_unstable_by_key(|entry| entry.0);
         self.nodes.insert(name.clone(), weight);
-
-        Some(name.clone())
+        Ok(name.clone())
     }
 
     pub fn remove_node(&mut self, name: &str) {
@@ -66,10 +65,6 @@ impl Ring {
 
     pub fn contains(&self, name: &str) -> bool {
         self.nodes.contains_key(name)
-    }
-
-    pub fn get_node(&self, key: &str) -> Option<String> {
-        self.lookup(key).map(|arc| arc.to_string())
     }
 
     pub fn lookup(&self, key: &str) -> Option<Arc<str>> {
@@ -128,7 +123,7 @@ mod tests {
         ring.add_node("node-B", 1);
         ring.add_node("node-C", 1);
 
-        let owner = ring.get_node("user:1");
+        let owner = ring.lookup("user:1");
         assert!(owner.is_some());
     }
 
@@ -139,8 +134,8 @@ mod tests {
         ring.add_node("B", 1);
         ring.add_node("C", 1);
 
-        let first = ring.get_node("my-key");
-        let second = ring.get_node("my-key");
+        let first = ring.lookup("my-key");
+        let second = ring.lookup("my-key");
         assert_eq!(first, second);
     }
 
@@ -171,7 +166,7 @@ mod tests {
 
         for i in 0..total {
             let key = format!("key-{}", i);
-            if let Some(owner) = ring.get_node(&key) {
+            if let Some(owner) = ring.lookup(&key) {
                 *counts.entry(owner.to_string()).or_insert(0) += 1;
             }
         }
@@ -202,14 +197,14 @@ mod tests {
 
         for i in 0..total {
             let key = format!("key-{}", i);
-            assert!(ring.get_node(&key).is_some(), "key {} returned None", key);
+            assert!(ring.lookup(&key).is_some(), "key {} returned None", key);
         }
     }
 
     #[test]
     fn empty_ring_returns_none() {
         let ring = Ring::new(DEFAULT_VIRTUAL_NODES);
-        assert_eq!(ring.get_node("blah"), None);
+        assert_eq!(ring.lookup("blah"), None);
     }
 
     #[test]
@@ -224,7 +219,7 @@ mod tests {
         assert!(ring.contains("B"));
         assert!(ring.contains("C"));
         assert!(!ring.contains("ghost"));
-        assert!(ring.get_node("some-key").is_some());
+        assert!(ring.lookup("some-key").is_some());
     }
 
     #[test]
@@ -252,8 +247,8 @@ mod tests {
 
         for i in 0..total {
             let key = format!("key-{}", i);
-            let owner = ring.get_node(&key).expect("ring should never return None here");
-            *counts.entry(owner).or_insert(0) += 1;
+            let owner = ring.lookup(&key).expect("ring should never return None here");
+            *counts.entry(owner.to_string()).or_insert(0) += 1;
         }
 
         let total_keys_assigned = counts.values().sum::<u32>() as f64;
@@ -303,7 +298,7 @@ mod tests {
         ring.add_node("B", 1);
         ring.add_node("C", 1);
 
-        let primary = ring.get_node("my-key").unwrap();
+        let primary = ring.lookup("my-key").unwrap();
         let replicas = ring.replicas("my-key", 3);
         assert_eq!(replicas[0].as_ref(), primary.as_str(), "First replica should match get_node");
     }
