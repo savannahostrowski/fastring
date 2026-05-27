@@ -4,7 +4,6 @@ A fast consistent hash ring for Python, implemented in Rust.
 
 - **6× faster** per-call lookups vs [`uhashring`](https://pypi.org/project/uhashring/), **11× faster** with the batch API
 - Weighted nodes, top-K replica lookup, batch lookup, picklable
-- Compatible with free-threaded Python (3.14t)
 
 ## Install
 
@@ -43,7 +42,7 @@ Apple Silicon, 100 nodes, 1000 keys per batch.
 | `get_node_batch`      | 56 ns/key  | (no API)      | **11.5×** |
 | `add + remove`    | 47 µs      | 3,524 µs      | **75×**   |
 
-Free-threaded 3.14t adds ~30 ns per call (PyO3 borrow check); batched ops are unchanged.
+Free-threaded 3.14t adds ~30 ns per call (PyO3 borrow check); batched ops are essentially unchanged.
 
 ## License
 
