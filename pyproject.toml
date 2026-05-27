@@ -36,3 +36,7 @@ dev = [
     "pytest>=8.0",
     "uhashring>=2.4",
 ]
+
+[tool.maturin]
+python-source="."
+include = ["fastring/*.pyi", "fastring/py.typed"]
