@@ -139,3 +139,14 @@ def test_pickle_preserves_virtual_nodes():
     r.add_node("a")
     restored = pickle.loads(pickle.dumps(r))
     assert "virtual_nodes=32" in repr(restored)
+
+def test_getitem_empty_ring_raises():
+    r = HashRing()
+    with pytest.raises(KeyError):
+        r["testeroo"]
+
+def test_getitem_returns_owner():
+    r = HashRing()
+    r.add_node("a")
+    r.add_node("b")
+    assert(r["k1"] in {"a", "b"})

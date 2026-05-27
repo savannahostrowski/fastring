@@ -1,4 +1,4 @@
-use pyo3::prelude::*;
+use pyo3::{exceptions::PyKeyError, prelude::*};
 use pyo3::types::PyString;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -84,6 +84,12 @@ impl HashRing {
             self.py_names.len(),
             self.inner.virtual_nodes()
         )
+    }
+
+    pub fn __getitem__(&self, py: Python<'_>, key: &str) -> PyResult<Py<PyString>> {
+        self.get_node(py, key).ok_or_else(|| PyKeyError::new_err(
+            format!("{} not found", key)
+        ))
     }
 
     // --- Pickle ---
