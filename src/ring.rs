@@ -1,4 +1,4 @@
-use std::{collections::HashMap, io::ErrorKind};
+use std::collections::HashMap;
 use std::sync::Arc;
 use xxhash_rust::xxh3::{xxh3_64, Xxh3};
 
@@ -31,11 +31,13 @@ impl Ring {
         self.nodes.iter().map(|(name, weight)| (name, weight))
     }
 
-    pub fn add_node(&mut self, name: &str, weight: u32) -> Result<Arc<str>, ErrorKind> {
+    /// Adds a node to the ring.
+    /// Returns `Some(arc)` if newly inserted, `None` if the node was already present.
+    pub fn add_node(&mut self, name: &str, weight: u32) -> Option<Arc<str>> {
         let name: Arc<str> = Arc::from(name);
 
         if self.nodes.contains_key(&*name) {
-            return Err(ErrorKind::AlreadyExists);
+            return None;
         }
 
         let mut hasher = Xxh3::new();
@@ -51,7 +53,7 @@ impl Ring {
 
         self.ring.sort_unstable_by_key(|entry| entry.0);
         self.nodes.insert(name.clone(), weight);
-        Ok(name.clone())
+        Some(name.clone())
     }
 
     pub fn remove_node(&mut self, name: &str) {
@@ -65,6 +67,10 @@ impl Ring {
 
     pub fn contains(&self, name: &str) -> bool {
         self.nodes.contains_key(name)
+    }
+
+    pub fn weight(&self, name: &str) -> Option<u32> {
+        self.nodes.get(name).copied()
     }
 
     pub fn lookup(&self, key: &str) -> Option<Arc<str>> {
@@ -300,7 +306,7 @@ mod tests {
 
         let primary = ring.lookup("my-key").unwrap();
         let replicas = ring.replicas("my-key", 3);
-        assert_eq!(replicas[0].as_ref(), primary.as_str(), "First replica should match get_node");
+        assert_eq!(replicas[0].as_ref(), primary.as_ref(), "First replica should match get_node");
     }
 
     #[test]
@@ -316,5 +322,18 @@ mod tests {
         ring.add_node("A", 1);
         let replicas = ring.replicas("my-key", 0);
         assert!(replicas.is_empty(), "Replicas should be empty when count is zero");
+    }
+
+    #[test]
+    fn existing_node_weight_can_be_retrieved() {
+        let mut ring = Ring::new(DEFAULT_VIRTUAL_NODES);
+        ring.add_node("A", 3);
+        assert_eq!(ring.weight("A"), Some(3));
+    }
+
+    #[test]
+    fn non_existent_node_weight_is_none() {
+        let ring = Ring::new(DEFAULT_VIRTUAL_NODES);
+        assert_eq!(ring.weight("ghost"), None);
     }
 }
