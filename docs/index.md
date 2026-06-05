@@ -23,9 +23,9 @@ ring.get_node("user:1234")  # -> 'server-B'
 
 ## Where to next
 
-- [Quickstart](quickstart.md) — install and a minimal example.
-- [API Reference](api.md) — every method with its full signature.
-- [Comparison with uhashring](comparison.md) — drop-in migration notes and side-by-side performance.
+- [Quickstart](quickstart.md): install and a minimal example.
+- [API Reference](api.md): every method with its full signature.
+- [Comparison with uhashring](comparison.md): drop-in migration notes and side-by-side performance.
 
 ## Project links
 

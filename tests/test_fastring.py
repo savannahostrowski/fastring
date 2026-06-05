@@ -241,7 +241,7 @@ def test_pickle_preserves_metadata():
 
 def test_get_node_returns_same_python_object():
     """The same node name returned twice should be the *same* Python
-    object (`is`), not just equal — verifies the PyString intern cache."""
+    object (`is`), not just equal: verifies the PyString intern cache."""
     r = HashRing()
     r.add_node("server-A")
     first = r.get_node("any-key")

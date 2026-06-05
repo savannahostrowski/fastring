@@ -47,7 +47,7 @@ ring.add_node("server-A", **{"weight": 2, "hostname": "a.example.com", "port": 8
 | Method                     | Why it's useful                                                                                  |
 | -------------------------- | ------------------------------------------------------------------------------------------------ |
 | `get_node_batch(keys)`     | Look up many keys in one FFI crossing; releases the GIL for the Rust work.                       |
-| `get_replicas(key, count)` | N distinct owners walking clockwise — replaces uhashring's `iterate_nodes(distinct=True)` pattern. |
+| `get_replicas(key, count)` | N distinct owners walking clockwise; replaces uhashring's `iterate_nodes(distinct=True)` pattern. |
 | `for name in ring`         | Direct iteration over registered node names.                                                     |
 
 ### What's not implemented

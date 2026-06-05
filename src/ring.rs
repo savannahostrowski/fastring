@@ -10,7 +10,7 @@ fn hash_str(s: &str) -> u64 {
 /// Position-only ring index.
 ///
 /// Holds the sorted virtual-node positions and the lookup machinery, but
-/// not node attributes (weight/hostname/etc.) — those are tracked by the
+/// not node attributes (weight/hostname/etc.), which are tracked by the
 /// owning `HashRing` so there's a single source of truth.
 pub struct Ring {
     positions: Vec<(u64, Arc<str>)>,
@@ -297,7 +297,7 @@ mod tests {
 
     #[test]
     fn readding_same_node_doubles_positions() {
-        // Ring no longer enforces uniqueness — that's HashRing's job.
+        // Ring no longer enforces uniqueness; that's HashRing's job.
         // This test documents that calling add twice doubles positions.
         let mut ring = Ring::new(DEFAULT_VIRTUAL_NODES);
         ring.add_node("A", 1);

@@ -36,7 +36,7 @@ ring.get_node("user:1234")                 # -> 'server-B'
 ring["user:1234"]                          # same, but raises KeyError if the ring is empty
 ```
 
-Lookups are deterministic — the same key always maps to the same node, until the ring changes.
+Lookups are deterministic: the same key always maps to the same node, until the ring changes.
 
 ### Look up many keys at once
 
