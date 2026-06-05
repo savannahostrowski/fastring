@@ -135,8 +135,8 @@ def test_nodes():
     r.add_node("a", weight=2)
     r.add_node("b", weight=3)
     expected = {
-        "a": {"weight": 2, "vnodes": 128},
-        "b": {"weight": 3, "vnodes": 128},
+        "a": {"weight": 2, "vnodes": 128, "hostname": None, "port": None, "instance": None},
+        "b": {"weight": 3, "vnodes": 128, "hostname": None, "port": None, "instance": None},
     }
     assert r.nodes == expected
 
@@ -181,6 +181,62 @@ def test_get_node_weight_zero_weight():
     r = HashRing()
     r.add_node("a", weight=0)
     assert r.get_node_weight("a") == 0
+
+
+def test_add_node_with_metadata():
+    r = HashRing()
+    r.add_node("a", weight=2, hostname="host-a", port=8080, instance={"client": "x"})
+    assert r.get_node_hostname("a") == "host-a"
+    assert r.get_node_port("a") == 8080
+    assert r.get_node_instance("a") == {"client": "x"}
+    assert r.get_node_weight("a") == 2
+
+
+def test_metadata_defaults_to_none():
+    r = HashRing()
+    r.add_node("a")
+    assert r.get_node_hostname("a") is None
+    assert r.get_node_port("a") is None
+    assert r.get_node_instance("a") is None
+
+
+def test_metadata_missing_node_returns_none():
+    r = HashRing()
+    assert r.get_node_hostname("ghost") is None
+    assert r.get_node_port("ghost") is None
+    assert r.get_node_instance("ghost") is None
+
+
+def test_nodes_includes_full_metadata():
+    r = HashRing()
+    r.add_node("a", weight=1, hostname="host-a", port=8080, instance="conn")
+    info = r.nodes["a"]
+    assert info["weight"] == 1
+    assert info["hostname"] == "host-a"
+    assert info["port"] == 8080
+    assert info["instance"] == "conn"
+
+
+def test_instance_holds_reference_identity():
+    r = HashRing()
+    obj = object()
+    r.add_node("a", instance=obj)
+    assert r.get_node_instance("a") is obj
+
+
+def test_pickle_preserves_metadata():
+    import pickle
+
+    r = HashRing()
+    r.add_node("a", weight=2, hostname="host-a", port=8080, instance={"key": "val"})
+    r.add_node("b", weight=1)
+
+    restored = pickle.loads(pickle.dumps(r))
+    assert restored.get_node_hostname("a") == "host-a"
+    assert restored.get_node_port("a") == 8080
+    assert restored.get_node_instance("a") == {"key": "val"}
+    assert restored.get_node_weight("a") == 2
+    assert restored.get_node_hostname("b") is None
 
 
 def test_get_node_returns_same_python_object():

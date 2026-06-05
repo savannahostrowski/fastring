@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 use xxhash_rust::xxh3::{Xxh3, xxh3_64};
 
@@ -8,18 +7,23 @@ fn hash_str(s: &str) -> u64 {
     xxh3_64(s.as_bytes())
 }
 
+/// Position-only ring index.
+///
+/// Holds the sorted virtual-node positions and the lookup machinery, but
+/// not node attributes (weight/hostname/etc.) — those are tracked by the
+/// owning `HashRing` so there's a single source of truth.
 pub struct Ring {
-    ring: Vec<(u64, Arc<str>)>,
-    nodes: HashMap<Arc<str>, u32>,
+    positions: Vec<(u64, Arc<str>)>,
     virtual_nodes: u32,
+    node_count: usize,
 }
 
 impl Ring {
     pub fn new(virtual_nodes: u32) -> Self {
         Self {
-            ring: Vec::new(),
-            nodes: HashMap::new(),
+            positions: Vec::new(),
             virtual_nodes,
+            node_count: 0,
         }
     }
 
@@ -27,76 +31,54 @@ impl Ring {
         self.virtual_nodes
     }
 
-    pub fn nodes_with_weights(&self) -> impl Iterator<Item = (&Arc<str>, &u32)> + '_ {
-        self.nodes.iter()
-    }
-
-    /// Adds a node to the ring.
-    /// Returns `Some(arc)` if newly inserted, `None` if the node was already present.
-    pub fn add_node(&mut self, name: &str, weight: u32) -> Option<Arc<str>> {
-        let name: Arc<str> = Arc::from(name);
-
-        if self.nodes.contains_key(&*name) {
-            return None;
-        }
-
+    /// Add `virtual_nodes * weight` ring positions for the given node.
+    /// Caller is responsible for ensuring the node is not already present.
+    pub fn add_positions(&mut self, name: &Arc<str>, weight: u32) {
         let mut hasher = Xxh3::new();
-
         for i in 0..self.virtual_nodes * weight {
             hasher.reset();
             hasher.update(name.as_bytes());
             hasher.update(b"#");
             hasher.update(&i.to_le_bytes());
             let position = hasher.digest();
-            self.ring.push((position, name.clone()))
+            self.positions.push((position, name.clone()));
         }
-
-        self.ring.sort_unstable_by_key(|entry| entry.0);
-        self.nodes.insert(name.clone(), weight);
-        Some(name.clone())
+        self.positions.sort_unstable_by_key(|entry| entry.0);
+        self.node_count += 1;
     }
 
-    pub fn remove_node(&mut self, name: &str) {
-        if !self.nodes.contains_key(name) {
-            return;
+    /// Remove all positions for the given node. No-op if the node has none.
+    pub fn remove_positions(&mut self, name: &str) {
+        let before = self.positions.len();
+        self.positions.retain(|entry| &*entry.1 != name);
+        if self.positions.len() < before {
+            self.node_count -= 1;
         }
-
-        self.ring.retain(|entry| &*entry.1 != name);
-        self.nodes.remove(name);
-    }
-
-    pub fn contains(&self, name: &str) -> bool {
-        self.nodes.contains_key(name)
-    }
-
-    pub fn weight(&self, name: &str) -> Option<u32> {
-        self.nodes.get(name).copied()
     }
 
     pub fn lookup(&self, key: &str) -> Option<Arc<str>> {
-        if self.ring.is_empty() {
+        if self.positions.is_empty() {
             return None;
         }
-
         let hash = hash_str(key);
-        let pos = self.ring.partition_point(|entry| entry.0 < hash);
-        let index = pos % self.ring.len();
-        Some(self.ring[index].1.clone())
+        let pos = self.positions.partition_point(|entry| entry.0 < hash);
+        let index = pos % self.positions.len();
+        Some(self.positions[index].1.clone())
     }
 
     pub fn replicas(&self, key: &str, count: usize) -> Vec<Arc<str>> {
-        if self.ring.is_empty() || count == 0 {
+        if self.positions.is_empty() || count == 0 {
             return Vec::new();
         }
 
-        let count = count.min(self.nodes.len());
+        let count = count.min(self.node_count);
         let hash = hash_str(key);
-        let pos = self.ring.partition_point(|entry| entry.0 < hash);
+        let pos = self.positions.partition_point(|entry| entry.0 < hash);
 
         let mut out: Vec<Arc<str>> = Vec::with_capacity(count);
-        for offset in 0..self.ring.len() {
-            let idx = (pos + offset) % self.ring.len();
-            let node = &self.ring[idx].1;
+        for offset in 0..self.positions.len() {
+            let idx = (pos + offset) % self.positions.len();
+            let node = &self.positions[idx].1;
 
             if out.iter().any(|existing| Arc::ptr_eq(existing, node)) {
                 continue;
@@ -113,14 +95,28 @@ impl Ring {
 
 #[cfg(test)]
 impl Ring {
-    pub fn ring_len(&self) -> usize {
-        self.ring.len()
+    pub fn positions_len(&self) -> usize {
+        self.positions.len()
+    }
+
+    pub fn contains_for_test(&self, name: &str) -> bool {
+        self.positions.iter().any(|entry| &*entry.1 == name)
+    }
+
+    pub fn add_node(&mut self, name: &str, weight: u32) {
+        let arc: Arc<str> = Arc::from(name);
+        self.add_positions(&arc, weight);
+    }
+
+    pub fn remove_node(&mut self, name: &str) {
+        self.remove_positions(name);
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
 
     #[test]
     fn basic_add_and_lookup() {
@@ -128,9 +124,7 @@ mod tests {
         ring.add_node("node-A", 1);
         ring.add_node("node-B", 1);
         ring.add_node("node-C", 1);
-
-        let owner = ring.lookup("user:1");
-        assert!(owner.is_some());
+        assert!(ring.lookup("user:1").is_some());
     }
 
     #[test]
@@ -151,17 +145,15 @@ mod tests {
         ring.add_node("A", 1);
         ring.add_node("B", 1);
         ring.add_node("C", 1);
-        assert!(ring.contains("A"));
+        assert!(ring.contains_for_test("A"));
         ring.remove_node("A");
-        assert!(!ring.contains("A"));
-        assert!(ring.contains("B"));
-        assert!(ring.contains("C"));
+        assert!(!ring.contains_for_test("A"));
+        assert!(ring.contains_for_test("B"));
+        assert!(ring.contains_for_test("C"));
     }
 
     #[test]
     fn balanced_distribution() {
-        use std::collections::HashMap;
-
         let mut ring = Ring::new(DEFAULT_VIRTUAL_NODES);
         ring.add_node("A", 1);
         ring.add_node("B", 1);
@@ -199,9 +191,7 @@ mod tests {
         ring.add_node("B", 1);
         ring.add_node("C", 1);
 
-        let total = 10_000;
-
-        for i in 0..total {
+        for i in 0..10_000 {
             let key = format!("key-{}", i);
             assert!(ring.lookup(&key).is_some(), "key {} returned None", key);
         }
@@ -219,26 +209,11 @@ mod tests {
         ring.add_node("A", 1);
         ring.add_node("B", 1);
         ring.add_node("C", 1);
-
         ring.remove_node("ghost");
-        assert!(ring.contains("A"));
-        assert!(ring.contains("B"));
-        assert!(ring.contains("C"));
-        assert!(!ring.contains("ghost"));
+        assert!(ring.contains_for_test("A"));
+        assert!(ring.contains_for_test("B"));
+        assert!(ring.contains_for_test("C"));
         assert!(ring.lookup("some-key").is_some());
-    }
-
-    #[test]
-    fn readding_node_is_idempotent() {
-        let mut ring = Ring::new(DEFAULT_VIRTUAL_NODES);
-        ring.add_node("A", 1);
-        let len_after_first = ring.ring_len();
-
-        ring.add_node("A", 1);
-        let len_after_second = ring.ring_len();
-
-        assert_eq!(len_after_first, len_after_second);
-        assert_eq!(len_after_first, DEFAULT_VIRTUAL_NODES as usize);
     }
 
     #[test]
@@ -253,20 +228,17 @@ mod tests {
 
         for i in 0..total {
             let key = format!("key-{}", i);
-            let owner = ring
-                .lookup(&key)
-                .expect("ring should never return None here");
+            let owner = ring.lookup(&key).expect("ring should never return None");
             *counts.entry(owner.to_string()).or_insert(0) += 1;
         }
 
-        let total_keys_assigned = counts.values().sum::<u32>() as f64;
-        let a = counts["A"] as f64 / total_keys_assigned;
-        let b = counts["B"] as f64 / total_keys_assigned;
-        let c = counts["C"] as f64 / total_keys_assigned;
+        let total_assigned = counts.values().sum::<u32>() as f64;
+        let a = counts["A"] as f64 / total_assigned;
+        let b = counts["B"] as f64 / total_assigned;
+        let c = counts["C"] as f64 / total_assigned;
 
-        // expected: 1/6, 2/6, 3/6
         fn close(actual: f64, expected: f64) -> bool {
-            (actual - expected).abs() < 0.05 // within 5 percentage points
+            (actual - expected).abs() < 0.05
         }
 
         assert!(close(a, 1.0 / 6.0), "A got share {} (expected ~0.167)", a);
@@ -294,17 +266,12 @@ mod tests {
         let mut ring = Ring::new(DEFAULT_VIRTUAL_NODES);
         ring.add_node("A", 1);
         ring.add_node("B", 1);
-
         let replicas = ring.replicas("my-key", 5);
-        assert_eq!(
-            replicas.len(),
-            2,
-            "Should return at most the number of nodes"
-        );
+        assert_eq!(replicas.len(), 2);
     }
 
     #[test]
-    fn replicas_primary_matches_get_node() {
+    fn replicas_primary_matches_lookup() {
         let mut ring = Ring::new(DEFAULT_VIRTUAL_NODES);
         ring.add_node("A", 1);
         ring.add_node("B", 1);
@@ -312,44 +279,32 @@ mod tests {
 
         let primary = ring.lookup("my-key").unwrap();
         let replicas = ring.replicas("my-key", 3);
-        assert_eq!(
-            replicas[0].as_ref(),
-            primary.as_ref(),
-            "First replica should match get_node"
-        );
+        assert_eq!(replicas[0].as_ref(), primary.as_ref());
     }
 
     #[test]
     fn replicas_on_empty_ring() {
         let ring = Ring::new(DEFAULT_VIRTUAL_NODES);
-        let replicas = ring.replicas("my-key", 3);
-        assert!(
-            replicas.is_empty(),
-            "Replicas should be empty on an empty ring"
-        );
+        assert!(ring.replicas("my-key", 3).is_empty());
     }
 
     #[test]
     fn replicas_zero_n() {
         let mut ring = Ring::new(DEFAULT_VIRTUAL_NODES);
         ring.add_node("A", 1);
-        let replicas = ring.replicas("my-key", 0);
-        assert!(
-            replicas.is_empty(),
-            "Replicas should be empty when count is zero"
-        );
+        assert!(ring.replicas("my-key", 0).is_empty());
     }
 
     #[test]
-    fn existing_node_weight_can_be_retrieved() {
+    fn readding_same_node_doubles_positions() {
+        // Ring no longer enforces uniqueness — that's HashRing's job.
+        // This test documents that calling add twice doubles positions.
         let mut ring = Ring::new(DEFAULT_VIRTUAL_NODES);
-        ring.add_node("A", 3);
-        assert_eq!(ring.weight("A"), Some(3));
-    }
-
-    #[test]
-    fn non_existent_node_weight_is_none() {
-        let ring = Ring::new(DEFAULT_VIRTUAL_NODES);
-        assert_eq!(ring.weight("ghost"), None);
+        ring.add_node("A", 1);
+        let after_first = ring.positions_len();
+        ring.add_node("A", 1);
+        let after_second = ring.positions_len();
+        assert_eq!(after_first, DEFAULT_VIRTUAL_NODES as usize);
+        assert_eq!(after_second, 2 * DEFAULT_VIRTUAL_NODES as usize);
     }
 }
