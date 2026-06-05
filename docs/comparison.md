@@ -62,8 +62,8 @@ Apple Silicon, 100 nodes, 1000 keys per batch, CPython 3.14.
 | -------------------------- | -------- | ------------- | --------- |
 | `get_node` (single call)   | 72 ns    | 564 ns        | **7.8×**  |
 | `get_node` (Python loop)   | 105 ns   | 645 ns        | **6.1×**  |
-| `get_node_batch` (per key) | 57 ns    | (no API)      | **11.3×** |
-| `add + remove` (per pair)  | 173 µs   | 3,550 µs      | **20.5×** |
+| `get_node_batch` (per key) | 54 ns    | (no API)      | **12.3×** |
+| `add + remove` (per pair)  | 46 µs    | 3,610 µs      | **79×**   |
 
 Free-threaded 3.14t adds roughly 30 ns per call (PyO3 borrow check overhead); batched operations are essentially unchanged.
 

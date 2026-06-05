@@ -45,8 +45,8 @@ fn bench_get_node_batch(c: &mut Criterion) {
     });
 }
 
-fn bench_add_remove_on_populated_ring(c: &mut Criterion) {
-    c.bench_function("add_remove_populated_ring", |b| {
+fn bench_add_on_populated_ring(c: &mut Criterion) {
+    c.bench_function("add_on_100_node_ring", |b| {
         b.iter_batched(
             || {
                 let mut ring = Ring::new(128);
@@ -55,10 +55,24 @@ fn bench_add_remove_on_populated_ring(c: &mut Criterion) {
                 }
                 ring
             },
-            |mut ring| {
-                add(&mut ring, black_box("node-X"), 1);
-                ring.remove_positions(black_box("node-X"));
+            |mut ring| add(&mut ring, black_box("node-X"), 1),
+            criterion::BatchSize::SmallInput,
+        );
+    });
+}
+
+fn bench_remove_on_populated_ring(c: &mut Criterion) {
+    c.bench_function("remove_on_100_node_ring", |b| {
+        b.iter_batched(
+            || {
+                let mut ring = Ring::new(128);
+                for i in 0..100 {
+                    add(&mut ring, &format!("node-{}", i), 1);
+                }
+                add(&mut ring, "node-X", 1);
+                ring
             },
+            |mut ring| ring.remove_positions(black_box("node-X")),
             criterion::BatchSize::SmallInput,
         );
     });
@@ -69,6 +83,7 @@ criterion_group!(
     bench_lookup,
     bench_add_node,
     bench_get_node_batch,
-    bench_add_remove_on_populated_ring
+    bench_add_on_populated_ring,
+    bench_remove_on_populated_ring
 );
 criterion_main!(benches);

@@ -43,7 +43,9 @@ impl Ring {
             let position = hasher.digest();
             self.positions.push((position, name.clone()));
         }
-        self.positions.sort_unstable_by_key(|entry| entry.0);
+        // Stable sort (Timsort): detects the existing sorted run, so this
+        // is effectively O(N + k log k) where k is the newly-added count.
+        self.positions.sort_by_key(|entry| entry.0);
         self.node_count += 1;
     }
 

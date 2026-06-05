@@ -1,6 +1,6 @@
 [package]
 name = "fastring"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 description = "A fast consistent hash ring for Python, implemented in Rust."
 license = "MIT"
@@ -23,3 +23,7 @@ criterion = "0.8.2"
 [[bench]]
 name = "hashring"
 harness = false
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
