@@ -31,11 +31,8 @@ jobs:
         with:
           toolchain: stable
 
-      - name: Sync dependencies
+      - name: Sync dependencies and build extension
         run: uv sync --group docs
-
-      - name: Build the Rust extension
-        run: uv run maturin develop --release
 
       - name: Build docs
         run: uv run zensical build
